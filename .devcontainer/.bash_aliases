@@ -12,5 +12,4 @@ cm  () {
     sr
 };
 
-cm
-sr
+echo "Please run 'cm' to build ROS components"
