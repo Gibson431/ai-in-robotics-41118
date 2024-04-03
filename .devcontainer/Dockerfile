@@ -30,7 +30,13 @@ USER root
 RUN apt-get update -y && apt-get install -y \
     python3 \
     python3-yaml \
-    python3-rospkg
+    python3-rospkg \
+    python3-rosdep \
+    python3-rosinstall \
+    python3-rosinstall-generator \
+    python3-wstool \
+    build-essential \
+    gdb
 
 RUN apt-get update -y && apt-get install -y \
     ros-noetic-navigation \
@@ -42,6 +48,13 @@ RUN apt-get update -y && apt-get install -y \
     ros-noetic-moveit-core \
     ros-noetic-teleop-twist-keyboard \
     ros-noetic-topic-tools
+
+RUN apt-get update -y && apt-get install -y \
+    ros-noetic-gazebo-ros \
+    ros-noetic-gazebo-ros-pkgs \
+    ros-noetic-robot-state-publisher \
+    ros-noetic-tf2-ros \
+    libignition-math4-dev
 
 RUN apt-get update && apt-get install -y \
     python3-pip
@@ -60,8 +73,18 @@ RUN rosdep update
 RUN mkdir -p /home/$USERNAME/catkin_ws/src
 
 # Example for cloning external git repos
-# RUN git clone https://github.com/nilseuropa/gazebo_ros_battery.git \
-#     /home/$USERNAME/catkin_ws/src/gazebo_ros_battery
+RUN git clone -b noetic https://github.com/41012/pfms-support.git \
+    /home/$USERNAME/Downloads/pfms-support
+
+# RUN cd /home/$USERNAME/Downloads/pfms-support/ && git checkout noetic && cd /home/$USERNAME
+
+ADD https://github.com/41012/pfms-support/raw/noetic/packages/pipes-2.5.0-noetic-Linux.deb /tmp
+
+RUN sudo dpkg -i /tmp/pipes-2.5.0-noetic-Linux.deb
+
+RUN ln -s /home/$USERNAME/Downloads/pfms-support/pfms-ros /home/$USERNAME/catkin_ws/src/
+
+# RUN git clone git@github.com:NovoG93/sjtu-drone.git /home/$USERNAME/catkin_ws/src/sjtu_drone
 
 # Source the ROS setup file
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> ~/.bashrc
