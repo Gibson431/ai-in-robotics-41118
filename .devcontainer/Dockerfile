@@ -78,6 +78,14 @@ RUN git clone -b noetic https://github.com/41012/pfms-support.git \
 
 # RUN cd /home/$USERNAME/Downloads/pfms-support/ && git checkout noetic && cd /home/$USERNAME
 
+RUN git clone https://github.com/mats-robotics/detection_msgs.git
+
+RUN git clone --recurse-submodules https://github.com/mats-robotics/yolov5_ros.git 
+
+RUN cd yolov5_ros/src/yolov5
+
+RUN pip install -r requirements.txt
+
 ADD https://github.com/41012/pfms-support/raw/noetic/packages/pipes-2.5.0-noetic-Linux.deb /tmp
 
 RUN sudo dpkg -i /tmp/pipes-2.5.0-noetic-Linux.deb
