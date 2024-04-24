@@ -124,7 +124,7 @@ class RandomTrackEnv(gym.Env):
         carpos = self.car.get_observation()
         (start_cones, l_cones, r_cones) = self._track_generator()
         self._track_generator.write_to_csv(
-            "test.csv",
+            "~test.csv",
             start_cones,
             l_cones,
             r_cones,
