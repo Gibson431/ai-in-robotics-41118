@@ -3,3 +3,4 @@ pybullet
 numpy
 gym
 torch
+pyvirtualdisplay
