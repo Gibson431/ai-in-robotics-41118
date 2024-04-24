@@ -9,12 +9,13 @@ from fsae.resources.goal import Goal
 from fsae.resources.cone import Cone
 import matplotlib.pyplot as plt
 import time
+from fsae.track_generator import TrackGenerator
 
 RENDER_HEIGHT = 720
 RENDER_WIDTH = 960
 
 
-class StaticTrackEnv(gym.Env):
+class RandomTrackEnv(gym.Env):
     metadata = {"render_modes": ["human", "fp_camera", "tp_camera"]}
 
     def __init__(self, render_mode=None):
@@ -39,6 +40,7 @@ class StaticTrackEnv(gym.Env):
             self._renders = False
             self._p = bc.BulletClient()
 
+        self._track_generator = TrackGenerator()
         self.reached_goal = False
         self._timeStep = 0.01
         self._actionRepeat = 20
@@ -103,7 +105,6 @@ class StaticTrackEnv(gym.Env):
         Plane(self._p)
         self.car = Car(self._p)
         self._envStepCounter = 0
-
         # Set the goal to a random target
         x = (
             self.np_random.uniform(5, 9)
@@ -121,12 +122,25 @@ class StaticTrackEnv(gym.Env):
         self.goal_object = Goal(self._p, self.goal)
         # Get observation to return
         carpos = self.car.get_observation()
+        (start_cones, l_cones, r_cones) = self._track_generator()
+        self._track_generator.write_to_csv(
+            "test.csv",
+            start_cones,
+            l_cones,
+            r_cones,
+            True,
+        )
 
+        self.cones = []
+        for c in l_cones:
+            self.cones.append(Cone(self._p, (c.real, c.imag), color="blue"))
+        for c in r_cones:
+            self.cones.append(Cone(self._p, (c.real, c.imag), color="yellow"))
         # Visual element of the goal
-        self.cones = [
-            Cone(self._p, (carpos[0], carpos[1] + 1), color="blue"),
-            Cone(self._p, (carpos[0], carpos[1] - 1), color="yellow"),
-        ]
+        # self.cones = [
+        #     Cone(self._p, (carpos[0], carpos[1] + 1), color="blue"),
+        #     Cone(self._p, (carpos[0], carpos[1] - 1), color="yellow"),
+        # ]
 
         self.prev_dist_to_goal = math.sqrt(
             ((carpos[0] - self.goal[0]) ** 2 + (carpos[1] - self.goal[1]) ** 2)
