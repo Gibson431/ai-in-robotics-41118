@@ -25,7 +25,5 @@ import random
 
 env = RandomTrackEnv(render_mode="tp_camera")
 
-env.reset()
-
 while True:
     time.sleep(1)
