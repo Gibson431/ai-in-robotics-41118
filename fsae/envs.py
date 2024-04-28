@@ -10,6 +10,7 @@ from fsae.resources.cone import Cone
 import matplotlib.pyplot as plt
 import time
 from fsae.track_generator import TrackGenerator
+from queue import Queue
 
 RENDER_HEIGHT = 720
 RENDER_WIDTH = 960
@@ -45,8 +46,6 @@ class RandomTrackEnv(gym.Env):
         self._timeStep = 0.01
         self._actionRepeat = 20
         self.car = None
-        self.goal_object = None
-        self.goal = None
         self.done = False
         self.prev_dist_to_goal = None
         self.rendered_img = None
@@ -63,9 +62,9 @@ class RandomTrackEnv(gym.Env):
                 time.sleep(self._timeStep)
 
             carpos, carorn = self._p.getBasePositionAndOrientation(self.car.car)
-            goalpos, goalorn = self._p.getBasePositionAndOrientation(
-                self.goal_object.goal
-            )
+            # goalpos, goalorn = self._p.getBasePositionAndOrientation(
+            #     self.goal_object.goal
+            # )
             car_ob = self.getExtendedObservation()
 
             if self._termination():
@@ -76,19 +75,23 @@ class RandomTrackEnv(gym.Env):
         # Compute reward as L2 change in distance to goal
         # dist_to_goal = math.sqrt(((car_ob[0] - self.goal[0]) ** 2 +
         # (car_ob[1] - self.goal[1]) ** 2))
-        dist_to_goal = math.sqrt(
-            ((carpos[0] - goalpos[0]) ** 2 + (carpos[1] - goalpos[1]) ** 2)
-        )
+        # dist_to_goal = math.sqrt(
+        #     ((carpos[0] - goalpos[0]) ** 2 + (carpos[1] - goalpos[1]) ** 2)
+        # )
+
+        # Distance to next centre
+        dist_to_goal = self.getCarDistToPoint(self.centres.queue[0])
+
         # reward = max(self.prev_dist_to_goal - dist_to_goal, 0)
         reward = -dist_to_goal
         self.prev_dist_to_goal = dist_to_goal
 
         # Done by reaching goal
-        if dist_to_goal < 1.5 and not self.reached_goal:
-            # print("reached goal")
-            self.done = True
-            self.reached_goal = True
-            reward += 50
+        if dist_to_goal < 1.5:
+            # Cycle the centres
+            self.centres.put(self.centres.get())
+            self.prev_dist_to_goal = self.getCarDistToPoint(self.centres.queue[0])
+            reward += 100
 
         ob = car_ob
         return ob, reward, self.done, dict()
@@ -105,21 +108,9 @@ class RandomTrackEnv(gym.Env):
         Plane(self._p)
         self.car = Car(self._p)
         self._envStepCounter = 0
-        # Set the goal to a random target
-        x = (
-            self.np_random.uniform(5, 9)
-            if self.np_random.integers(2)
-            else self.np_random.uniform(-9, -5)
-        )
-        y = (
-            self.np_random.uniform(5, 9)
-            if self.np_random.integers(2)
-            else self.np_random.uniform(-9, -5)
-        )
-        self.goal = (x, y)
+
         self.done = False
-        self.reached_goal = False
-        self.goal_object = Goal(self._p, self.goal)
+        # self.goal_object = Goal(self._p, self.goal)
         # Get observation to return
         carpos = self.car.get_observation()
         (start_cones, l_cones, r_cones) = self._track_generator()
@@ -136,15 +127,24 @@ class RandomTrackEnv(gym.Env):
             self.cones.append(Cone(self._p, (c.real, c.imag), color="blue"))
         for c in r_cones:
             self.cones.append(Cone(self._p, (c.real, c.imag), color="yellow"))
-        # Visual element of the goal
-        # self.cones = [
-        #     Cone(self._p, (carpos[0], carpos[1] + 1), color="blue"),
-        #     Cone(self._p, (carpos[0], carpos[1] - 1), color="yellow"),
-        # ]
+        for c in start_cones:
+            self.cones.append(Cone(self._p, (c.real, c.imag), color="orange"))
 
-        self.prev_dist_to_goal = math.sqrt(
-            ((carpos[0] - self.goal[0]) ** 2 + (carpos[1] - self.goal[1]) ** 2)
-        )
+        self.centres = Queue()
+        for i in range(len(l_cones)):
+            self.centres.put(
+                (
+                    (l_cones[i].real + r_cones[i].real) / 2,
+                    (l_cones[i].imag + r_cones[i].imag) / 2,
+                )
+            )
+
+        # Visualise the centre pos
+        # self.centre_obj = []
+        # for c in self.centres.queue:
+        #     self.centre_obj.append(Goal(self._p, c))
+
+        self.prev_dist_to_goal = self.getCarDistToPoint(self.centres.queue[0])
         car_ob = self.getExtendedObservation()
         return np.array(car_ob, dtype=np.float32)
 
@@ -174,9 +174,9 @@ class RandomTrackEnv(gym.Env):
                 projectionMatrix=proj_matrix,
                 renderer=p.ER_BULLET_HARDWARE_OPENGL,
             )
-            frame = np.array(px)
-            frame = frame[:, :, :3]
-            return frame
+            # frame = np.array(px)
+            # frame = frame[:, :, :3]
+            return px
             # self.rendered_img.set_data(frame)
             # plt.draw()
             # plt.pause(.00001)
@@ -206,22 +206,29 @@ class RandomTrackEnv(gym.Env):
                 renderer=p.ER_BULLET_HARDWARE_OPENGL,
             )
             frame = np.array(px)
-            frame = frame[:, :, :3]
+            # frame = frame[:, :, :3]
             return frame
         else:
             return np.array([])
 
     def getExtendedObservation(self):
         # self._observation = []  #self._racecar.getObservation()
-        carpos, carorn = self._p.getBasePositionAndOrientation(self.car.car)
-        goalpos, goalorn = self._p.getBasePositionAndOrientation(self.goal_object.goal)
-        invCarPos, invCarOrn = self._p.invertTransform(carpos, carorn)
-        goalPosInCar, goalOrnInCar = self._p.multiplyTransforms(
-            invCarPos, invCarOrn, goalpos, goalorn
-        )
+        # carpos, carorn = self._p.getBasePositionAndOrientation(self.car.car)
+        # goalpos, goalorn = self._p.getBasePositionAndOrientation(self.goal_object.goal)
+        # invCarPos, invCarOrn = self._p.invertTransform(carpos, carorn)
+        # goalPosInCar, goalOrnInCar = self._p.multiplyTransforms(
+        #     invCarPos, invCarOrn, goalpos, goalorn
+        # )
+        # observation = [goalPosInCar[0], goalPosInCar[1]]
+        # return observation
 
-        observation = [goalPosInCar[0], goalPosInCar[1]]
-        return observation
+        carpos, _ = self._p.getBasePositionAndOrientation(self.car.car)
+        return [carpos[0], carpos[1]]
+
+    def getCarDistToPoint(self, point):
+        carpos = self.car.get_observation()
+        dist = math.sqrt(((carpos[0] - point[0]) ** 2 + (carpos[1] - point[1]) ** 2))
+        return dist
 
     def _termination(self):
         return self._envStepCounter > 2000

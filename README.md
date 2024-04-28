@@ -8,16 +8,6 @@
 
 ## Usage ##
 
-`xhost +` in terminal
+### Teleoperation ###
 
-Open folder in vscode
-
-`> Dev Container: Rebuild and Reopen in container`
-
-Open terminal
-
-```bash
-roscore
-roslaunch gazebo_tf ugv_a3.launch
-rosrun ai_sim ai_sim_sample
-```
+`python Teleop.py`
