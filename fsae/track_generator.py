@@ -452,6 +452,7 @@ class TrackGenerator:
         r_cones = place(
             positions - normals * track_width / 2, corner_radii + track_width / 2, -1
         )
+        centres = place(positions, corner_radii, 0)
 
         start_cones = np.array([l_cones[0], r_cones[0]])
         start_cones = np.append(
@@ -467,17 +468,19 @@ class TrackGenerator:
             car_pos -= 1
 
         # translate car to 0+0j
-        l_cones -= positions[car_pos]
-        r_cones -= positions[car_pos]
-        start_cones -= positions[car_pos]
+        # l_cones -= positions[car_pos]
+        # r_cones -= positions[car_pos]
+        # start_cones -= positions[car_pos]
+        # centres -= positions[car_pos]
 
         # rotate the car to face right
         rotation = 1j / normals[car_pos]
         l_cones *= rotation
         r_cones *= rotation
         start_cones *= rotation
+        centres *= rotation
 
-        return start_cones, l_cones[1:], r_cones[1:]
+        return start_cones, l_cones[1:], r_cones[1:], centres
 
     @staticmethod
     def write_to_csv(file_path, start_cones, l_cones, r_cones, overwrite=False):

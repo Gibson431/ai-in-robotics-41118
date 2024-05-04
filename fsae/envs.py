@@ -19,7 +19,7 @@ RENDER_WIDTH = 960
 class RandomTrackEnv(gym.Env):
     metadata = {"render_modes": ["human", "fp_camera", "tp_camera"]}
 
-    def __init__(self, render_mode=None):
+    def __init__(self, render_mode=None, seed=None):
 
         self.action_space = gym.spaces.box.Box(
             low=np.array([-1, -0.6], dtype=np.float32),
@@ -41,13 +41,17 @@ class RandomTrackEnv(gym.Env):
             self._renders = False
             self._p = bc.BulletClient()
 
-        self._track_generator = TrackGenerator()
+        if seed:
+            self._track_generator = TrackGenerator(config={"seed": seed})
+        else:
+            self._track_generator = TrackGenerator()
+        self._path = None
         self.reached_goal = False
         self._timeStep = 0.01
         self._actionRepeat = 20
         self.car = None
         self.done = False
-        self.prev_dist_to_goal = None
+        self.prev_dist = None
         self.rendered_img = None
         self.render_rot_matrix = None
         self.reset()
@@ -72,26 +76,26 @@ class RandomTrackEnv(gym.Env):
                 break
             self._envStepCounter += 1
 
-        # Compute reward as L2 change in distance to goal
-        # dist_to_goal = math.sqrt(((car_ob[0] - self.goal[0]) ** 2 +
-        # (car_ob[1] - self.goal[1]) ** 2))
-        # dist_to_goal = math.sqrt(
-        #     ((carpos[0] - goalpos[0]) ** 2 + (carpos[1] - goalpos[1]) ** 2)
-        # )
+        dist = self.projectAndFindDistance(
+            self.centres.queue[0],
+            self.centres.queue[1],
+            self.car.get_observation()[0:2],
+        )
 
-        # Distance to next centre
-        dist_to_goal = self.getCarDistToPoint(self.centres.queue[0])
+        reward = dist - self.prev_dist
+        self.prev_dist = dist
 
-        # reward = max(self.prev_dist_to_goal - dist_to_goal, 0)
-        reward = -dist_to_goal
-        self.prev_dist_to_goal = dist_to_goal
-
-        # Done by reaching goal
-        if dist_to_goal < 1.5:
-            # Cycle the centres
+        length_of_segment = self.calcDistanceBetweenPoints(
+            self.centres.queue[0],
+            self.centres.queue[1],
+        )
+        if dist > length_of_segment:
             self.centres.put(self.centres.get())
-            self.prev_dist_to_goal = self.getCarDistToPoint(self.centres.queue[0])
-            reward += 100
+            self.prev_dist = self.projectAndFindDistance(
+                self.centres.queue[0],
+                self.centres.queue[1],
+                self.car.get_observation()[0:2],
+            )
 
         ob = car_ob
         return ob, reward, self.done, dict()
@@ -113,14 +117,51 @@ class RandomTrackEnv(gym.Env):
         # self.goal_object = Goal(self._p, self.goal)
         # Get observation to return
         carpos = self.car.get_observation()
-        (start_cones, l_cones, r_cones) = self._track_generator()
-        self._track_generator.write_to_csv(
+
+        margin = (
+            self._track_generator.config["track_width"] / 2
+            + self._track_generator.config["margin"]
+        )
+        while True:
+            self._path = TrackGenerator.generate_path_w_params(
+                rng=self._track_generator.rng,
+                n_points=self._track_generator.config["resolution"],
+                min_corner_radius=self._track_generator.config["min_corner_radius"],
+                max_frequency=self._track_generator.config["max_frequency"],
+                amplitude=self._track_generator.config["amplitude"],
+            )
+            if not (
+                self._track_generator.config["check_self_intersection"]
+                and TrackGenerator.self_intersects(*self._path[:2], margin)
+            ):
+                break
+        self._path = TrackGenerator.pick_starting_point(
+            *self._path,
+            starting_straight_length=self._track_generator.config[
+                "starting_straight_length"
+            ],
+            downsample=self._track_generator.config["starting_straight_downsample"],
+        )
+
+        (start_cones, l_cones, r_cones, centres) = TrackGenerator.place_cones(
+            *self._path,
+            self._track_generator.config["min_corner_radius"],
+            min_cone_spacing=self._track_generator.config["min_cone_spacing"],
+            max_cone_spacing=self._track_generator.config["max_cone_spacing"],
+            track_width=self._track_generator.config["track_width"],
+            cone_spacing_bias=self._track_generator.config["cone_spacing_bias"],
+            start_offset=self._track_generator.config["starting_straight_length"],
+            starting_cone_spacing=self._track_generator.config["starting_cone_spacing"],
+        )
+
+        TrackGenerator.write_to_csv(
             "~test.csv",
             start_cones,
             l_cones,
             r_cones,
             True,
         )
+        # print(self._path)
 
         self.cones = []
         for c in l_cones:
@@ -131,20 +172,16 @@ class RandomTrackEnv(gym.Env):
             self.cones.append(Cone(self._p, (c.real, c.imag), color="orange"))
 
         self.centres = Queue()
-        for i in range(len(l_cones)):
-            self.centres.put(
-                (
-                    (l_cones[i].real + r_cones[i].real) / 2,
-                    (l_cones[i].imag + r_cones[i].imag) / 2,
-                )
-            )
+        for i, p in enumerate(centres):
+            # if i % 50 == 0:
+            self.centres.put((p.real, p.imag))
 
         # Visualise the centre pos
         # self.centre_obj = []
         # for c in self.centres.queue:
         #     self.centre_obj.append(Goal(self._p, c))
 
-        self.prev_dist_to_goal = self.getCarDistToPoint(self.centres.queue[0])
+        self.prev_dist = 0
         car_ob = self.getExtendedObservation()
         return np.array(car_ob, dtype=np.float32)
 
@@ -225,13 +262,92 @@ class RandomTrackEnv(gym.Env):
         carpos, _ = self._p.getBasePositionAndOrientation(self.car.car)
         return [carpos[0], carpos[1]]
 
-    def getCarDistToPoint(self, point):
-        carpos = self.car.get_observation()
-        dist = math.sqrt(((carpos[0] - point[0]) ** 2 + (carpos[1] - point[1]) ** 2))
+    @staticmethod
+    def calcDistanceBetweenPoints(point1, point2):
+        dist = math.sqrt(((point1[0] - point2[0]) ** 2 + (point1[1] - point2[1]) ** 2))
         return dist
 
     def _termination(self):
-        return self._envStepCounter > 2000
+        dist = self.normal_distance(
+            self.centres.queue[0],
+            self.centres.queue[1],
+            self.car.get_observation()[0:2],
+        )
+        return dist > 1.5
 
     def close(self):
         self._p.disconnect()
+
+    @staticmethod
+    def projectAndFindDistance(point1, point2, p):
+        """
+        Project point p onto the line defined by point1 and point2, and find the distance from point1
+        to the projected point along the line segment.
+
+        :param point1: A tuple (x1, y1) representing the first point.
+        :param point2: A tuple (x2, y2) representing the second point.
+        :param p: A tuple (px, py) representing the point to be projected.
+        :return: The distance from point1 to the projected point along the line segment.
+        """
+        x1, y1 = point1
+        x2, y2 = point2
+        px, py = p
+
+        # Vector from point1 to point2
+        dx, dy = x2 - x1, y2 - y1
+        # Vector from point1 to p
+        dx1, dy1 = px - x1, py - y1
+
+        # Calculate the dot product of vectors (point1 to point2) and (point1 to p)
+        dot_product = dx * dx1 + dy * dy1
+        # Length squared of the vector (point1 to point2)
+        length_squared = dx * dx + dy * dy
+
+        if length_squared == 0:
+            # The points point1 and point2 are the same. The distance is just the distance to point1
+            return 0
+
+        # Projection parameter of p onto the line
+        projection_t = dot_product / length_squared
+
+        # # Clamp the projection_t to lie within [0, 1] for the segment
+        # projection_t = max(0, min(1, projection_t))
+
+        # Calculate the distance from point1 to the projected point using projection_t
+        if projection_t >= 0:
+            projected_distance = (projection_t * length_squared) ** 0.5
+        else:  # Handle if the car moves backwards
+            projected_distance = -((-projection_t * length_squared) ** 0.5)
+
+        return projected_distance
+
+    @staticmethod
+    def normal_distance(point1, point2, p):
+        """
+        Calculate the perpendicular distance from point p to the line defined by point1 and point2.
+
+        :param point1: A tuple (x1, y1) representing the first point.
+        :param point2: A tuple (x2, y2) representing the second point.
+        :param p: A tuple (px, py) representing the point from which the distance is to be calculated.
+        :return: The perpendicular distance from p to the line segment defined by point1 and point2.
+        """
+        x1, y1 = point1
+        x2, y2 = point2
+        px, py = p
+
+        # Calculate the numerator (area of the triangle formed by the points multiplied by 2)
+        numerator = abs((x2 - x1) * (y1 - py) - (x1 - px) * (y2 - y1))
+
+        # Calculate the denominator (length of the base of the triangle)
+        denominator = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
+
+        if denominator == 0:
+            # Point1 and Point2 are the same point
+            return float(
+                0
+            )  # or some large number, as the concept of a line doesn't exist here
+
+        # Distance is numerator divided by denominator
+        distance = numerator / denominator
+
+        return distance
