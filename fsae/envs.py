@@ -307,17 +307,10 @@ class RandomTrackEnv(gym.Env):
             # The points point1 and point2 are the same. The distance is just the distance to point1
             return 0
 
-        # Projection parameter of p onto the line
-        projection_t = dot_product / length_squared
-
-        # # Clamp the projection_t to lie within [0, 1] for the segment
-        # projection_t = max(0, min(1, projection_t))
-
-        # Calculate the distance from point1 to the projected point using projection_t
-        if projection_t >= 0:
-            projected_distance = (projection_t * length_squared) ** 0.5
-        else:  # Handle if the car moves backwards
-            projected_distance = -((-projection_t * length_squared) ** 0.5)
+        projected_distance = abs(dot_product) ** 0.5
+        projected_distance = (
+            projected_distance if dot_product >= 0 else -projected_distance
+        )
 
         return projected_distance
 
