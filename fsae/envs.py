@@ -273,6 +273,10 @@ class RandomTrackEnv(gym.Env):
             self.centres.queue[1],
             self.car.get_observation()[0:2],
         )
+
+        if dist == float("inf"):
+            return False  # this should never happen, but just incase
+
         return dist > 1.5
 
     def close(self):
@@ -334,11 +338,9 @@ class RandomTrackEnv(gym.Env):
         # Calculate the denominator (length of the base of the triangle)
         denominator = ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
 
+        # Point1 and Point2 are the same point
         if denominator == 0:
-            # Point1 and Point2 are the same point
-            return float(
-                0
-            )  # or some large number, as the concept of a line doesn't exist here
+            return float("inf")
 
         # Distance is numerator divided by denominator
         distance = numerator / denominator
