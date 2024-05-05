@@ -1,13 +1,9 @@
 # ai-in-robotics-41118 #
 
-## Dependencies ## 
+## Dependencies ##
 
-- docker
-- vscode
-    - vscode extension: devcontainers
+All required dependencies are provided in the `requirements.txt`. Use some environment manager (venv, anaconda, etc.) or install everything locally.
 
 ## Usage ##
 
-### Teleoperation ###
-
-`python Teleop.py`
+To see a basic example of the environment, run `Evaluate.py`
