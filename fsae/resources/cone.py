@@ -7,5 +7,6 @@ class Cone:
         f_name = os.path.join(
             os.path.dirname(__file__), f"models/cone_{color}/cone_{color}.urdf"
         )
-        self.goal = client.loadURDF(f_name, [base[0], base[1], 0])
+        self.cone = client.loadURDF(f_name, [base[0], base[1], 0])
+        self.color = color
         # self.goal = client.load(f_name)

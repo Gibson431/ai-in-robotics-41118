@@ -12,12 +12,11 @@ import time
 from fsae.track_generator import TrackGenerator
 from queue import Queue
 
-RENDER_HEIGHT = 720
-RENDER_WIDTH = 960
-
 
 class RandomTrackEnv(gym.Env):
     metadata = {"render_modes": ["human", "fp_camera", "tp_camera"]}
+    RENDER_HEIGHT = 720
+    RENDER_WIDTH = 960
 
     def __init__(self, render_mode=None, seed=None):
 
@@ -58,6 +57,12 @@ class RandomTrackEnv(gym.Env):
         self._envStepCounter = 0
 
     def step(self, action):
+        """
+        Steps the simulation, applying the action.
+
+        :param action: A tuple (t, s) representing the throttle(-1,1) and steering(-0.6,0.6).
+        :return: observation(closest 4 cones in FOV), reward (distance travelled in step), done flag, info (empty dict)
+        """
         # Feed action to the car and get observation of car's state
         self.car.apply_action(action)
         for i in range(self._actionRepeat):
@@ -98,7 +103,8 @@ class RandomTrackEnv(gym.Env):
             )
 
         ob = car_ob
-        return ob, reward, self.done, dict()
+        visual_cones = self.getConesTransformedAndSorted(4)
+        return visual_cones, reward, self.done, dict()
 
     def seed(self, seed=None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)
@@ -182,18 +188,42 @@ class RandomTrackEnv(gym.Env):
         #     self.centre_obj.append(Goal(self._p, c))
 
         self.prev_dist = 0
-        car_ob = self.getExtendedObservation()
-        return np.array(car_ob, dtype=np.float32)
+        # car_ob = self.getExtendedObservation()
+        visual_cones = self.getConesTransformedAndSorted(4)
+        return visual_cones
 
-    def render(self, mode="human"):
+    def render(self, mode="fp_camera"):
+        """
+        Computes and returns the camera image based on the specified mode.
+
+        This function supports two modes of camera views in a simulation environment:
+        1. "fp_camera" - First person camera view from the perspective of a car.
+        2. "tp_camera" - Third person camera view, providing an overhead perspective.
+
+        :param mode (str): Specifies the camera mode. It can be either "fp_camera" for first person
+                    view or "tp_camera" for third person view. The default is "fp_camera".
+
+        :return (tuple): This function returns a tuple (rgb, depth) where 'rgb' is an array
+            representing the RGB image and 'depth' is an array representing the depth
+            information from the camera perspective. If an unsupported mode is specified,
+            it returns two empty lists, ([], []).
+
+        Details:
+            - "fp_camera": Calculates the projection and view matrices based on the car's
+                           current position and orientation. It uses these matrices to render
+                           the camera image showing what is directly in front of the car.
+            - "tp_camera": Similar to "fp_camera", but sets the camera at a fixed distance from
+                           the car, looking at it from an angle, providing a broader view of
+                           the surroundings.
+        """
         if mode == "fp_camera":
             # Base information
             car_id = self.car.get_ids()
             proj_matrix = self._p.computeProjectionMatrixFOV(
-                fov=80, aspect=1, nearVal=0.01, farVal=100
+                fov=90, aspect=1, nearVal=0.01, farVal=100
             )
             pos, ori = [list(l) for l in self._p.getBasePositionAndOrientation(car_id)]
-            pos[2] = 0.3
+            pos[2] = 0.4
 
             # Rotate camera direction
             rot_mat = np.array(self._p.getMatrixFromQuaternion(ori)).reshape(3, 3)
@@ -204,19 +234,14 @@ class RandomTrackEnv(gym.Env):
             # Display image
             # frame = self._p.getCameraImage(100, 100, view_matrix, proj_matrix)[2]
             # frame = np.reshape(frame, (100, 100, 4))
-            (_, _, px, _, _) = self._p.getCameraImage(
-                width=RENDER_WIDTH,
-                height=RENDER_HEIGHT,
+            (_, _, rgb, depth, _) = self._p.getCameraImage(
+                width=self.RENDER_WIDTH,
+                height=self.RENDER_HEIGHT,
                 viewMatrix=view_matrix,
                 projectionMatrix=proj_matrix,
                 renderer=p.ER_BULLET_HARDWARE_OPENGL,
             )
-            # frame = np.array(px)
-            # frame = frame[:, :, :3]
-            return px
-            # self.rendered_img.set_data(frame)
-            # plt.draw()
-            # plt.pause(.00001)
+            return (rgb, depth)
 
         elif mode == "tp_camera":
             car_id = self.car.get_ids()
@@ -231,22 +256,20 @@ class RandomTrackEnv(gym.Env):
             )
             proj_matrix = self._p.computeProjectionMatrixFOV(
                 fov=60,
-                aspect=float(RENDER_WIDTH) / RENDER_HEIGHT,
+                aspect=float(self.RENDER_WIDTH) / self.RENDER_HEIGHT,
                 nearVal=0.1,
                 farVal=100.0,
             )
-            (_, _, px, _, _) = self._p.getCameraImage(
-                width=RENDER_WIDTH,
-                height=RENDER_HEIGHT,
+            (_, _, rgb, depth, _) = self._p.getCameraImage(
+                width=self.RENDER_WIDTH,
+                height=self.RENDER_HEIGHT,
                 viewMatrix=view_matrix,
                 projectionMatrix=proj_matrix,
                 renderer=p.ER_BULLET_HARDWARE_OPENGL,
             )
-            frame = np.array(px)
-            # frame = frame[:, :, :3]
-            return frame
+            return rgb, depth
         else:
-            return np.array([])
+            return [], []
 
     def getExtendedObservation(self):
         # self._observation = []  #self._racecar.getObservation()
@@ -261,6 +284,10 @@ class RandomTrackEnv(gym.Env):
 
         carpos, _ = self._p.getBasePositionAndOrientation(self.car.car)
         return [carpos[0], carpos[1]]
+
+    # def getConeObservation(self):
+    #     cones = self.getConesTransformedAndSorted(4)
+    #     return cones
 
     @staticmethod
     def calcDistanceBetweenPoints(point1, point2):
@@ -346,3 +373,47 @@ class RandomTrackEnv(gym.Env):
         distance = numerator / denominator
 
         return distance
+
+    def getConesTransformedAndSorted(self, num_cones):
+        # Convert all cones to car reference frame
+        cones = [(self.reframeToCar(c.cone)[:2, 3], c.color) for c in self.cones]
+
+        # Filter out cones outside of 90deg FOV
+        cones = [(p, c) for p, c in cones if (abs(p[0]) >= abs(p[1])) and (p[0] > 0)]
+
+        # Calculate the magnitude of each coordinate and pair it with the corresponding tuple
+        magnitudes = [(np.linalg.norm(xy), name, xy) for xy, name in cones]
+
+        # Sort the list of tuples based on the calculated magnitude
+        sorted_magnitudes = sorted(magnitudes, key=lambda x: x[0])
+
+        # Return the original tuples, sorted by magnitude
+        return [(xy, name) for _, name, xy in sorted_magnitudes][:num_cones]
+
+    @staticmethod
+    def get_transformation_matrix(position, orientation):
+        # Convert quaternion to rotation matrix
+        rotation_matrix = np.array(p.getMatrixFromQuaternion(orientation)).reshape(3, 3)
+        # Create transformation matrix
+        transformation_matrix = np.eye(4)
+        transformation_matrix[:3, :3] = rotation_matrix
+        transformation_matrix[:3, 3] = position
+        return transformation_matrix
+
+    def reframeToCar(self, target_object):
+        # Get the world position and orientation of the car object
+        car_pos, car_ori = p.getBasePositionAndOrientation(self.car.car)
+        # Get the world position and orientation of the target object
+        target_pos, target_ori = p.getBasePositionAndOrientation(target_object)
+
+        # Compute the transformation matrices
+        target_world_matrix = self.get_transformation_matrix(car_pos, car_ori)
+        world_matrix = self.get_transformation_matrix(target_pos, target_ori)
+
+        # Compute the inverse of the target's world transformation matrix
+        target_world_matrix_inv = np.linalg.inv(target_world_matrix)
+
+        # Compute the transformation from world object to the target object frame
+        transformation_to_target_frame = np.dot(target_world_matrix_inv, world_matrix)
+
+        return transformation_to_target_frame
