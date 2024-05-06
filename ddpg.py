@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
+import csv
 
 # Define the Actor and Critic networks
 class Actor(nn.Module):
@@ -122,3 +123,29 @@ class ReplayBuffer:
         dones = self.done_buffer[indices]
 
         return states, actions, rewards, next_states, dones
+
+    def save_as_csv(self, file_path):
+        with open(file_path, 'w', newline='') as csvfile:
+            writer = csv.writer(csvfile)
+            writer.writerow(['state', 'action', 'reward', 'next_state', 'done'])
+            for i in range(self.size):
+                writer.writerow([
+                    ','.join(map(str, self.state_buffer[i])),
+                    ','.join(map(str, self.action_buffer[i])),
+                    str(self.reward_buffer[i]),
+                    ','.join(map(str, self.next_state_buffer[i])),
+                    str(int(self.done_buffer[i]))
+                ])
+
+    def load_from_csv(self, file_path):
+        with open(file_path, 'r') as csvfile:
+            reader = csv.reader(csvfile)
+            next(reader)  # Skip header row
+            for row in reader:
+                state = np.array([float(x) for x in row[0].split(',')])
+                action = np.array([float(x) for x in row[1].split(',')])
+                reward = float(row[2])
+                next_state = np.array([float(x) for x in row[3].split(',')])
+                done = bool(int(row[4]))
+
+                self.add(state, action, reward, next_state, done)

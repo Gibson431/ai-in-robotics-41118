@@ -37,7 +37,7 @@ episode_reward_history = []
 replay_buffer = ReplayBuffer(buffer_size=1000000, state_dim=state_dim, action_dim=action_dim)
 agent = DDPGAgent(state_dim, action_dim, hidden_dim, replay_buffer, max_action)
 
-model_file = "policy_network_e.pkl"
+model_file = "replayBuffer_teleop.csv"
 
 
 def main():
@@ -90,10 +90,8 @@ def main():
     if replay_buffer.buffer_size > batch_size:
             agent.train(batch_size)
 
-    torch.save(
-        agent.critic.state_dict(),
-        model_file,
-    )
+    replay_buffer.save_as_csv(model_file)
+    
     env.close()
     
     # Test the training
@@ -108,35 +106,44 @@ def test():
     replay_buffer = ReplayBuffer(buffer_size=1000000, state_dim=state_dim, action_dim=action_dim)
     agent = DDPGAgent(state_dim, action_dim, hidden_dim, replay_buffer, max_action)
     try:
-        agent.critic.load_state_dict(torch.load(model_file))
-    except:
+        replay_buffer.load_from_csv(model_file)
+        #actor.load_state_dict(model_file)
+    except Exception as e:
         print("------------------------ yooooo this sucks - code better ------------------------------")
         print("ending sequence")
         return
-    total_reward = 0
-    for i in range(5):
+    print("Replay buffer size after load: ", replay_buffer.size, " vs Batch Size: ", batch_size)
+    
+    if replay_buffer.size > batch_size:
+        print("Replay buffer loaded. Training agent")
+        agent.train(batch_size)
+    print("Training agent completes")
+
+    for i in range(10):
+        total_reward = 0
         state = env.reset(seed=i)
         while not done:
-            with torch.no_grad():
-                q_values = agent.critic(torch.tensor(state, dtype=torch.float32), [0,0])
-            action = torch.argmax(q_values).item()
+            action = agent.get_action(state)
             state_, reward, done, _ = env.step(action)
+            replay_buffer.add(state, action, reward, state_, done)
+
             total_reward += reward
             print(f"total: {total_reward}, step: {reward}")
             _ = env.render("fp_camera")
+
+            if replay_buffer.buffer_size > batch_size:
+                agent.train(batch_size)
+
             
-    env.close()
-
-
 if __name__ == "__main__":
-    Train = False
+    Train = True
     Test = True
     if Train:
         main()
     if Test:
         test()
-
-
+    env.close()
+    
 
 print("Total time spent in get_key function:", time_get_key)
 print("Total time spent in main function:", time_main)
