@@ -385,16 +385,30 @@ class RandomTrackEnv(gym.Env):
         cones = [(p, c) for p, c in cones if (abs(p[0]) >= abs(p[1])) and (p[0] > 0)]
 
         # Calculate the magnitude of each coordinate and pair it with the corresponding tuple
-        magnitudes = [(np.linalg.norm(xy), name, xy) for xy, name in cones]
+        magnitudes = [(np.linalg.norm(xy), xy, name) for xy, name in cones]
 
         # Sort the list of tuples based on the calculated magnitude
         sorted_magnitudes = sorted(magnitudes, key=lambda x: x[0])
 
-        cones = [(xy, 0 if name is 'yellow' else 1) for _, name, xy in sorted_magnitudes][:num_cones]
+        cones = [(xy, name) for _, xy, name in sorted_magnitudes][:num_cones]
+        cones_mapped = []
+        for c, c_color in cones:
+            color_int = 0
+            match c_color:
+                case "yellow":
+                    color_int = 1
+                case "blue":
+                    color_int = 2
+                case "orange":
+                    color_int = 3
+                case _:
+                    color_int = 0
+            cones_mapped.append((c, color_int))
+        while len(cones_mapped) < 4:
+            cones_mapped.append(([0,0], 0))
 
-        cones = np.hstack([np.hstack(detection) for detection in cones])
-        # Return the original tuples, sorted by magnitude
-        return cones
+        cones_stacked = np.hstack([np.hstack(detection) for detection in cones_mapped])
+        return cones_stacked
 
     @staticmethod
     def get_transformation_matrix(position, orientation):
