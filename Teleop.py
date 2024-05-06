@@ -29,8 +29,8 @@ action_dim = 2 # Dimension of the action space
 hidden_dim = 256
 max_action = 0.6 # Maximum value of the action
 num_episodes = 10000
-max_steps = 1000
-batch_size = 1000
+max_steps = 100
+batch_size = 512
 
 episode_history = []
 episode_reward_history = []
@@ -38,7 +38,10 @@ replay_buffer = ReplayBuffer(buffer_size=1000000, state_dim=state_dim, action_di
 agent = DDPGAgent(state_dim, action_dim, hidden_dim, replay_buffer, max_action)
 
 model_file = "replayBuffer_teleop_test.csv"
-
+try:
+    replay_buffer.load_from_csv(model_file)
+except:
+    "No existing file to work with. Retrain model recommended"
 
 def main():
     env = RandomTrackEnv(render_mode="tp_camera")
@@ -87,9 +90,8 @@ def main():
             global time_main
             time_main += end_time_step - start_time_main
             #_ = env.render("fp_camera")
-            print("tick")
-        print("number of datapoints captured for the dataset - ",agent.replay_buffer.size)
-        replay_buffer.save_as_csv(f'replayBuffer_teleop_{i}.csv')
+            print("number of datapoints captured for the dataset - ",agent.replay_buffer.size)
+        replay_buffer.save_as_csv(f'replayBuffer_teleop_test_{i}.csv')
         
     #once all iterations are complete - save the data files
     if replay_buffer.buffer_size > batch_size:
@@ -112,7 +114,7 @@ def test():
     agent = DDPGAgent(state_dim, action_dim, hidden_dim, replay_buffer, max_action)
     try:
         #Make sure the name of the file does not have "test" in it. 
-        replay_buffer.load_from_csv("replayBuffer_teleop.csv")
+        replay_buffer.load_from_csv("replayBuffer_teleop_test.csv")
     except Exception as e:
         print("------------------------ yooooo this sucks - code better ------------------------------")
         print("ending sequence")
@@ -128,7 +130,7 @@ def test():
         total_reward = 0
         state = env.reset(seed=i)
         done = False
-        while not done:
+        for step in range(max_steps):
             action = agent.get_action(state)
             state_, reward, done, _ = env.step(action)
             replay_buffer.add(state, action, reward, state_, done)
@@ -136,7 +138,7 @@ def test():
 
             total_reward += reward
             print(f"total: {total_reward}, step: {reward}")
-            _ = env.render("fp_camera")
+            #_ = env.render("fp_camera")
 
             if replay_buffer.buffer_size > batch_size:
                 agent.train(batch_size)
