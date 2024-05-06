@@ -103,14 +103,14 @@ class RandomTrackEnv(gym.Env):
             )
 
         ob = car_ob
-        visual_cones = self.getConesTransformedAndSorted(4)
+        visual_cones = np.asarray(self.getConesTransformedAndSorted(4), dtype=np.float32)
         return visual_cones, reward, self.done, dict()
 
     def seed(self, seed=None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)
         return [seed]
 
-    def reset(self):
+    def reset(self, seed = None):
         self._p.resetSimulation()
         self._p.setTimeStep(self._timeStep)
         self._p.setGravity(0, 0, -10)
@@ -123,7 +123,10 @@ class RandomTrackEnv(gym.Env):
         # self.goal_object = Goal(self._p, self.goal)
         # Get observation to return
         carpos = self.car.get_observation()
-
+        
+        if seed is not None: 
+            self._track_generator = TrackGenerator(config={"seed": seed})
+        
         margin = (
             self._track_generator.config["track_width"] / 2
             + self._track_generator.config["margin"]
@@ -387,8 +390,11 @@ class RandomTrackEnv(gym.Env):
         # Sort the list of tuples based on the calculated magnitude
         sorted_magnitudes = sorted(magnitudes, key=lambda x: x[0])
 
+        cones = [(xy, 0 if name is 'yellow' else 1) for _, name, xy in sorted_magnitudes][:num_cones]
+
+        cones = np.hstack([np.hstack(detection) for detection in cones])
         # Return the original tuples, sorted by magnitude
-        return [(xy, name) for _, name, xy in sorted_magnitudes][:num_cones]
+        return cones
 
     @staticmethod
     def get_transformation_matrix(position, orientation):
