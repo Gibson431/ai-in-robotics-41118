@@ -404,7 +404,7 @@ class RandomTrackEnv(gym.Env):
                 case _:
                     color_int = 0
             cones_mapped.append((c, color_int))
-        while len(cones_mapped) < 4:
+        while len(cones_mapped) < num_cones:
             cones_mapped.append(([0,0], 0))
 
         cones_stacked = np.hstack([np.hstack(detection) for detection in cones_mapped])
