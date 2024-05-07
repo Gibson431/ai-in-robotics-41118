@@ -145,8 +145,8 @@ def test():
     env.close()
             
 if __name__ == "__main__":
-    Train = False
-    Test = True
+    Train = True
+    Test = False
     if Train:
         main()
     if Test:
