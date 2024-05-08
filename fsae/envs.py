@@ -10,7 +10,7 @@ from fsae.resources.cone import Cone
 import matplotlib.pyplot as plt
 import time
 from fsae.track_generator import TrackGenerator
-from queue import Queue
+from collections import deque
 
 
 class RandomTrackEnv(gym.Env):
@@ -82,8 +82,8 @@ class RandomTrackEnv(gym.Env):
             self._envStepCounter += 1
 
         dist = self.projectAndFindDistance(
-            self.centres.queue[0],
-            self.centres.queue[1],
+            list(self.centres)[0],
+            list(self.centres)[1],
             self.car.get_observation()[0:2],
         )
 
@@ -91,14 +91,21 @@ class RandomTrackEnv(gym.Env):
         self.prev_dist = dist
 
         length_of_segment = self.calcDistanceBetweenPoints(
-            self.centres.queue[0],
-            self.centres.queue[1],
+            list(self.centres)[0],
+            list(self.centres)[1],
         )
         if dist > length_of_segment:
-            self.centres.put(self.centres.get())
+            self.centres.append(self.centres.popleft())
             self.prev_dist = self.projectAndFindDistance(
-                self.centres.queue[0],
-                self.centres.queue[1],
+                list(self.centres)[0],
+                list(self.centres)[1],
+                self.car.get_observation()[0:2],
+            )
+        if dist < 0:
+            self.centres.appendleft(self.centres.pop())
+            self.prev_dist = self.projectAndFindDistance(
+                list(self.centres)[0],
+                list(self.centres)[1],
                 self.car.get_observation()[0:2],
             )
 
@@ -182,10 +189,10 @@ class RandomTrackEnv(gym.Env):
         for c in start_cones:
             self.cones.append(Cone(self._p, (c.real, c.imag), color="orange"))
 
-        self.centres = Queue()
+        self.centres = deque()
         for i, p in enumerate(centres):
             # if i % 50 == 0:
-            self.centres.put((p.real, p.imag))
+            self.centres.append((p.real, p.imag))
 
         # Visualise the centre pos
         # self.centre_obj = []
@@ -301,8 +308,8 @@ class RandomTrackEnv(gym.Env):
 
     def _termination(self):
         dist = self.normal_distance(
-            self.centres.queue[0],
-            self.centres.queue[1],
+            list(self.centres)[0],
+            list(self.centres)[1],
             self.car.get_observation()[0:2],
         )
 
