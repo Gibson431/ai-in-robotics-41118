@@ -47,7 +47,7 @@ class RandomTrackEnv(gym.Env):
         self._path = None
         self.reached_goal = False
         self._timeStep = 0.01
-        self._actionRepeat = 20
+        self._actionRepeat = 50
         self.car = None
         self.done = False
         self.prev_dist = None
@@ -103,14 +103,16 @@ class RandomTrackEnv(gym.Env):
             )
 
         ob = car_ob
-        visual_cones = np.asarray(self.getConesTransformedAndSorted(4), dtype=np.float32)
+        visual_cones = np.asarray(
+            self.getConesTransformedAndSorted(4), dtype=np.float32
+        )
         return visual_cones, reward, self.done, dict()
 
     def seed(self, seed=None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)
         return [seed]
 
-    def reset(self, seed = None):
+    def reset(self, seed=None):
         self._p.resetSimulation()
         self._p.setTimeStep(self._timeStep)
         self._p.setGravity(0, 0, -10)
@@ -123,10 +125,10 @@ class RandomTrackEnv(gym.Env):
         # self.goal_object = Goal(self._p, self.goal)
         # Get observation to return
         carpos = self.car.get_observation()
-        
-        if seed is not None: 
+
+        if seed is not None:
             self._track_generator = TrackGenerator(config={"seed": seed})
-        
+
         margin = (
             self._track_generator.config["track_width"] / 2
             + self._track_generator.config["margin"]
@@ -378,36 +380,48 @@ class RandomTrackEnv(gym.Env):
         return distance
 
     def getConesTransformedAndSorted(self, num_cones):
+        l_cones = [c for c in self.cones if c.color == "blue"]
+        r_cones = [c for c in self.cones if c.color == "yellow"]
+
         # Convert all cones to car reference frame
-        cones = [(self.reframeToCar(c.cone)[:2, 3], c.color) for c in self.cones]
+        l_cones = [(self.reframeToCar(c.cone)[:2, 3], c.color) for c in l_cones]
+        r_cones = [(self.reframeToCar(c.cone)[:2, 3], c.color) for c in r_cones]
 
         # Filter out cones outside of 90deg FOV
-        cones = [(p, c) for p, c in cones if (abs(p[0]) >= abs(p[1])) and (p[0] > 0)]
+        l_cones = [
+            (p, c) for p, c in l_cones if (abs(p[0]) >= abs(p[1])) and (p[0] > 0)
+        ]
+        r_cones = [
+            (p, c) for p, c in r_cones if (abs(p[0]) >= abs(p[1])) and (p[0] > 0)
+        ]
 
         # Calculate the magnitude of each coordinate and pair it with the corresponding tuple
-        magnitudes = [(np.linalg.norm(xy), xy, name) for xy, name in cones]
+        l_magnitudes = [(np.linalg.norm(xy), xy, name) for xy, name in l_cones]
+        r_magnitudes = [(np.linalg.norm(xy), xy, name) for xy, name in r_cones]
 
         # Sort the list of tuples based on the calculated magnitude
-        sorted_magnitudes = sorted(magnitudes, key=lambda x: x[0])
+        l_sorted_magnitudes = sorted(l_magnitudes, key=lambda x: x[0])
+        r_sorted_magnitudes = sorted(r_magnitudes, key=lambda x: x[0])
 
-        cones = [(xy, name) for _, xy, name in sorted_magnitudes][:num_cones]
+        l_cones = [(xy, name) for _, xy, name in l_sorted_magnitudes][
+            : int(num_cones / 2)
+        ]
+        r_cones = [(xy, name) for _, xy, name in r_sorted_magnitudes][
+            : int(num_cones / 2)
+        ]
+
         cones_mapped = []
-        for c, c_color in cones:
-            color_int = 0
-            match c_color:
-                case "yellow":
-                    color_int = 1
-                case "blue":
-                    color_int = 2
-                case "orange":
-                    color_int = 3
-                case _:
-                    color_int = 0
-            cones_mapped.append((c, color_int))
+        for c, _ in l_cones:
+            cones_mapped.append(c)
+        while len(cones_mapped) < num_cones / 2:
+            cones_mapped.append([0, 0])
+        for c, _ in r_cones:
+            cones_mapped.append(c)
         while len(cones_mapped) < num_cones:
-            cones_mapped.append(([0,0], 0))
+            cones_mapped.append([0, 0])
 
         cones_stacked = np.hstack([np.hstack(detection) for detection in cones_mapped])
+        print(cones_stacked)
         return cones_stacked
 
     @staticmethod
