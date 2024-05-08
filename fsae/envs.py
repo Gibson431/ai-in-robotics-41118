@@ -421,7 +421,6 @@ class RandomTrackEnv(gym.Env):
             cones_mapped.append([0, 0])
 
         cones_stacked = np.hstack([np.hstack(detection) for detection in cones_mapped])
-        print(cones_stacked)
         return cones_stacked
 
     @staticmethod
