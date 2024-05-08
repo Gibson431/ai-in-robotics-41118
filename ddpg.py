@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 import csv
+from os import mkdir, path
 
 # Define the Actor and Critic networks
 class Actor(nn.Module):
@@ -48,6 +49,35 @@ class DDPGAgent:
 
         self.update_target_networks(tau=1)
 
+    def save_weights(self, best=True):
+        try:
+            mkdir('weights')
+            mkdir('weights/best')
+            mkdir('weights/last')
+        except:
+            pass
+
+        if best:
+            base = "weights/best"
+        else:
+            base = "weights/last"
+
+        torch.save(self.actor.state_dict(), path.join(base,'actor.pth'))
+        torch.save(self.target_actor.state_dict(), path.join(base,'target_actor.pth'))
+        torch.save(self.critic.state_dict(), path.join(base,'critic.pth'))
+        torch.save(self.target_critic.state_dict(), path.join(base,'target_critic.pth'))
+
+    def load_weights(self, best=True):
+        if best:
+            base = "weights/best"
+        else:
+            base = "weights/last"
+
+        self.actor.load_state_dict(torch.load(path.join(base,'actor.pth')))
+        self.target_actor.load_state_dict(torch.load(path.join(base,'target_actor.pth')))
+        self.critic.load_state_dict(torch.load(path.join(base,'critic.pth')))
+        self.target_critic.load_state_dict(torch.load(path.join(base,'target_critic.pth')))
+
     def update_target_networks(self, tau=0.005):
         critic_state_dict = self.critic.state_dict()
         actor_state_dict = self.actor.state_dict()
@@ -59,7 +89,9 @@ class DDPGAgent:
     def get_action(self, state):
         state = torch.from_numpy(state).float().unsqueeze(0)
         action = self.actor(state).squeeze(0).detach().numpy()
-        return np.clip(action, -self.max_action, self.max_action)
+        for i in range(len(action)):
+            action[i] = np.clip(action[i], -self.max_action[i], self.max_action[i])
+        return action
 
     def train(self, batch_size):
         states, actions, rewards, next_states, dones = self.replay_buffer.sample(batch_size)
