@@ -106,6 +106,14 @@ class RandomTrackEnv(gym.Env):
             self.car.get_observation()[0:2],
         )
 
+        if dist < prev_dist: #if the car sarts reversing
+            self.done = True
+            break
+
+        if (dist - prev_dist) < 0.0001: #if the car is stopped
+            self.done = True
+            break
+
         reward = dist - self.prev_dist
         self.prev_dist = dist
 
@@ -368,7 +376,7 @@ class RandomTrackEnv(gym.Env):
         if dist == float("inf"):
             return False  # this should never happen, but just incase
 
-        return dist > 1.5
+        return dist > 1.3
 
     def close(self):
         cv2.destroyAllWindows()
