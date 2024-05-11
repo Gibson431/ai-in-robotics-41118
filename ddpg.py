@@ -52,7 +52,13 @@ class DDPGAgent:
     def save_weights(self, best=True):
         try:
             mkdir('weights')
+        except:
+            pass
+        try:
             mkdir('weights/best')
+        except:
+            pass
+        try:
             mkdir('weights/last')
         except:
             pass
@@ -89,9 +95,13 @@ class DDPGAgent:
     def get_action(self, state):
         state = torch.from_numpy(state).float().unsqueeze(0)
         action = self.actor(state).squeeze(0).detach().numpy()
+        return self.clip_action(action)
+    
+    def clip_action(self, action):
         for i in range(len(action)):
             action[i] = np.clip(action[i], -self.max_action[i], self.max_action[i])
         return action
+
 
     def train(self, batch_size):
         states, actions, rewards, next_states, dones = self.replay_buffer.sample(batch_size)
@@ -181,3 +191,39 @@ class ReplayBuffer:
                 done = bool(int(row[4]))
 
                 self.add(state, action, reward, next_state, done)
+
+class EpsilonGreedy:
+    def __init__(self, start_eps, end_eps, eps_decay, max_steps, sigma):
+        self.start_eps = start_eps
+        self.end_eps = end_eps
+        self.eps_decay = eps_decay
+        self.max_steps = max_steps
+        self.sigma = sigma
+        self.current_step = 0
+        self.epsilon = start_eps
+
+    def get_epsilon(self):
+        if self.current_step >= self.max_steps:
+            return self.end_eps
+        else:
+            self.epsilon = self.start_eps * np.exp(-self.current_step * self.eps_decay)
+            return self.epsilon
+    
+    def incr_step(self):
+        self.current_step += 1
+
+    def reset(self):
+        self.current_step = 0
+        self.epsilon = self.start_eps
+
+    def get_action(self, agent, state):
+        if np.random.rand() < self.get_epsilon():
+            # Explore: Take a random action
+            action = np.asarray([1, np.random.normal(0, self.sigma)]) 
+            # print(action)
+            action = agent.clip_action(action)
+        else:
+            # Exploit: Take the action recommended by the agent
+            action = agent.get_action(state)
+
+        return action
