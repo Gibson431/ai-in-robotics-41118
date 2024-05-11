@@ -11,10 +11,12 @@ import matplotlib.pyplot as plt
 import time
 from fsae.track_generator import TrackGenerator
 from collections import deque
+from fsae.detect import object_detection
+import cv2
 
 
 class RandomTrackEnv(gym.Env):
-    metadata = {"render_modes": ["human", "fp_camera", "tp_camera"]}
+    metadata = {"render_modes": ["human", "fp_camera", "tp_camera", "detections"]}
     RENDER_HEIGHT = 720
     RENDER_WIDTH = 960
 
@@ -32,8 +34,15 @@ class RandomTrackEnv(gym.Env):
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
+        if self.render_mode == 'detections':
+            self.detects_ = True
+        else: 
+            self.detects_ = False
 
-        if render_mode:
+        if render_mode == 'detections':
+            self._renders = True
+            self._p = bc.BulletClient()
+        elif render_mode:
             self._p = bc.BulletClient(connection_mode=p.GUI)
             self._renders = True
         else:
@@ -55,6 +64,9 @@ class RandomTrackEnv(gym.Env):
         self.render_rot_matrix = None
         self.reset()
         self._envStepCounter = 0
+        if self.detects_:
+            self.detector = object_detection('fsae/cones.pt',(0.23, 0.31))
+            self.detection_window = cv2.namedWindow('Detections')
 
     def step(self, action):
         """
@@ -68,6 +80,13 @@ class RandomTrackEnv(gym.Env):
         for i in range(self._actionRepeat):
             self._p.stepSimulation()
             if self._renders:
+                rgb = self.render()
+                if self.detects_:
+                    results = self.detector.detect(rgb)
+                    cv2.imshow('Detections', cv2.cvtColor(results.render()[0], cv2.COLOR_RGB2BGR))
+                    cv2.waitKey(1)
+                    boxes = results.pred[0][0, :4].cpu()
+                    print(self.detector.reproject_object_to_3d(boxes))
                 time.sleep(self._timeStep)
 
             carpos, carorn = self._p.getBasePositionAndOrientation(self.car.car)
@@ -204,13 +223,14 @@ class RandomTrackEnv(gym.Env):
         visual_cones = self.getConesTransformedAndSorted(4)
         return visual_cones
 
-    def render(self, mode="fp_camera"):
+    def render(self, mode=None):
         """
         Computes and returns the camera image based on the specified mode.
 
         This function supports two modes of camera views in a simulation environment:
         1. "fp_camera" - First person camera view from the perspective of a car.
         2. "tp_camera" - Third person camera view, providing an overhead perspective.
+        3. "detector" 
 
         :param mode (str): Specifies the camera mode. It can be either "fp_camera" for first person
                     view or "tp_camera" for third person view. The default is "fp_camera".
@@ -228,11 +248,13 @@ class RandomTrackEnv(gym.Env):
                            the car, looking at it from an angle, providing a broader view of
                            the surroundings.
         """
+        if mode == None:
+            mode = self.render_mode
         if mode == "fp_camera":
             # Base information
             car_id = self.car.get_ids()
             proj_matrix = self._p.computeProjectionMatrixFOV(
-                fov=90, aspect=1, nearVal=0.01, farVal=100
+                fov=60, aspect=16/9, nearVal=0.01, farVal=100
             )
             pos, ori = [list(l) for l in self._p.getBasePositionAndOrientation(car_id)]
             pos[2] = 0.4
@@ -243,6 +265,36 @@ class RandomTrackEnv(gym.Env):
             up_vec = np.matmul(rot_mat, np.array([0, 0, 1]))
             view_matrix = self._p.computeViewMatrix(pos, pos + camera_vec, up_vec)
 
+            # self.detector.set_intrinsics(proj_matrix.)
+            # Display image
+            # frame = self._p.getCameraImage(100, 100, view_matrix, proj_matrix)[2]
+            # frame = np.reshape(frame, (100, 100, 4))
+            (_, _, rgb, depth, _) = self._p.getCameraImage(
+                width=self.RENDER_WIDTH,
+                height=self.RENDER_HEIGHT,
+                viewMatrix=view_matrix,
+                projectionMatrix=proj_matrix,
+                renderer=p.ER_BULLET_HARDWARE_OPENGL,
+            )
+            return (rgb, depth)
+        
+        elif mode == "detections":
+            # Base information
+            car_id = self.car.get_ids()
+            fov = 60
+            proj_matrix = self._p.computeProjectionMatrixFOV(
+                fov=fov, aspect=16/9, nearVal=0.01, farVal=100
+            )
+            pos, ori = [list(l) for l in self._p.getBasePositionAndOrientation(car_id)]
+            pos[2] = 0.4
+
+            # Rotate camera direction
+            rot_mat = np.array(self._p.getMatrixFromQuaternion(ori)).reshape(3, 3)
+            camera_vec = np.matmul(rot_mat, [1, 0, 0])
+            up_vec = np.matmul(rot_mat, np.array([0, 0, 1]))
+            view_matrix = self._p.computeViewMatrix(pos, pos + camera_vec, up_vec)
+
+            self.detector.set_intrinsics(fov,fov, self.RENDER_WIDTH, self.RENDER_HEIGHT)
             # Display image
             # frame = self._p.getCameraImage(100, 100, view_matrix, proj_matrix)[2]
             # frame = np.reshape(frame, (100, 100, 4))
@@ -319,6 +371,7 @@ class RandomTrackEnv(gym.Env):
         return dist > 1.5
 
     def close(self):
+        cv2.destroyAllWindows()
         self._p.disconnect()
 
     @staticmethod
