@@ -4,3 +4,4 @@ numpy
 gym
 torch
 pyvirtualdisplay
+yolov5
