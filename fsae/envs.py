@@ -14,11 +14,37 @@ from collections import deque
 from fsae.detect import object_detection
 import cv2
 
+def draw_bounding_boxes(image_array, bboxes, colors=None):
+    """
+    Draw bounding boxes on an RGB image array.
+
+    Args:
+        image_array (numpy.ndarray): The input RGB image as a NumPy array.
+        bboxes (list): A list of bounding box coordinates in the format [x_min, y_min, x_max, y_max].
+        colors (list, optional): A list of colors for the bounding boxes in BGR format. If None, random colors will be used.
+
+    Returns:
+        numpy.ndarray: The image array with bounding boxes drawn.
+    """
+    
+    # Convert the RGB image array to BGR format (OpenCV convention)
+    image = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
+    
+    # If colors is None, generate random colors for each bounding box
+    if colors is None:
+        colors = [(np.random.randint(0, 256), np.random.randint(0, 256), np.random.randint(0, 256)) for _ in range(len(bboxes))]
+    
+    # Draw the bounding boxes
+    for bbox, color in zip(bboxes, colors):
+        x_min, y_min, x_max, y_max = bbox
+        cv2.rectangle(image, (int(x_min), int(y_min)), (int(x_max), int(y_max)), color, 2)
+    
+    return image
 
 class RandomTrackEnv(gym.Env):
     metadata = {"render_modes": ["human", "fp_camera", "tp_camera", "detections"]}
     RENDER_HEIGHT = 720
-    RENDER_WIDTH = 960
+    RENDER_WIDTH = 1280
 
     def __init__(self, render_mode=None, seed=None):
 
@@ -41,7 +67,7 @@ class RandomTrackEnv(gym.Env):
 
         if render_mode == 'detections':
             self._renders = True
-            self._p = bc.BulletClient()
+            self._p = bc.BulletClient()#connection_mode=p.GUI)
         elif render_mode:
             self._p = bc.BulletClient(connection_mode=p.GUI)
             self._renders = True
@@ -67,7 +93,7 @@ class RandomTrackEnv(gym.Env):
         if self.detects_:
             self.detector = object_detection('fsae/cones.pt',(0.23, 0.31))
             self.detection_window = cv2.namedWindow('Detections')
-
+    
     def step(self, action):
         """
         Steps the simulation, applying the action.
@@ -80,13 +106,11 @@ class RandomTrackEnv(gym.Env):
         for i in range(self._actionRepeat):
             self._p.stepSimulation()
             if self._renders:
-                rgb = self.render()
+                rgb, depth = self.render()
                 if self.detects_:
                     results = self.detector.detect(rgb)
                     cv2.imshow('Detections', cv2.cvtColor(results.render()[0], cv2.COLOR_RGB2BGR))
                     cv2.waitKey(1)
-                    boxes = results.pred[0][0, :4].cpu()
-                    print(self.detector.reproject_object_to_3d(boxes))
                 time.sleep(self._timeStep)
 
             carpos, carorn = self._p.getBasePositionAndOrientation(self.car.car)
@@ -99,6 +123,16 @@ class RandomTrackEnv(gym.Env):
                 self.done = True
                 break
             self._envStepCounter += 1
+        
+        if self._renders:
+            box = []
+            for i in range(4):
+                boxes = results.pred[0][i, :4].cpu()
+                box.append(boxes)
+                print(self.detector.reproject_object_to_3d(boxes, depth))
+                print(results.pred[0][i, 5])
+            cv2.imshow('valid',draw_bounding_boxes(rgb, box))
+            cv2.waitKey(0)
 
         dist = self.projectAndFindDistance(
             list(self.centres)[0],
@@ -106,13 +140,13 @@ class RandomTrackEnv(gym.Env):
             self.car.get_observation()[0:2],
         )
 
-        if dist < prev_dist: #if the car sarts reversing
+        if dist < self.prev_dist: #if the car sarts reversing
             self.done = True
-            break
+            
 
-        if (dist - prev_dist) < 0.0001: #if the car is stopped
+        if (dist - self.prev_dist) < 0.0001: #if the car is stopped
             self.done = True
-            break
+            
 
         reward = dist - self.prev_dist
         self.prev_dist = dist
@@ -283,15 +317,18 @@ class RandomTrackEnv(gym.Env):
                 viewMatrix=view_matrix,
                 projectionMatrix=proj_matrix,
                 renderer=p.ER_BULLET_HARDWARE_OPENGL,
-            )
+            ) 
             return (rgb, depth)
         
         elif mode == "detections":
             # Base information
             car_id = self.car.get_ids()
             fov = 60
+            aspect = 16/9
+            near = 0.01
+            far = 100
             proj_matrix = self._p.computeProjectionMatrixFOV(
-                fov=fov, aspect=16/9, nearVal=0.01, farVal=100
+                fov=fov, aspect=aspect, nearVal=near, farVal=far
             )
             pos, ori = [list(l) for l in self._p.getBasePositionAndOrientation(car_id)]
             pos[2] = 0.4
@@ -302,7 +339,7 @@ class RandomTrackEnv(gym.Env):
             up_vec = np.matmul(rot_mat, np.array([0, 0, 1]))
             view_matrix = self._p.computeViewMatrix(pos, pos + camera_vec, up_vec)
 
-            self.detector.set_intrinsics(fov,fov, self.RENDER_WIDTH, self.RENDER_HEIGHT)
+            self.detector.set_intrinsics(fov,aspect, self.RENDER_WIDTH, self.RENDER_HEIGHT, near, far)
             # Display image
             # frame = self._p.getCameraImage(100, 100, view_matrix, proj_matrix)[2]
             # frame = np.reshape(frame, (100, 100, 4))
@@ -447,7 +484,7 @@ class RandomTrackEnv(gym.Env):
 
         return distance
 
-    def getConesTransformedAndSorted(self, num_cones):
+    def getConesTransformedAndSorted(self, num_cones, detected_cones=None):
         l_cones = [c for c in self.cones if c.color == "blue"]
         r_cones = [c for c in self.cones if c.color == "yellow"]
 
@@ -462,7 +499,8 @@ class RandomTrackEnv(gym.Env):
         r_cones = [
             (p, c) for p, c in r_cones if (abs(p[0]) >= abs(p[1])) and (p[0] > 0)
         ]
-
+        # if detected_cones: 
+        #     for 
         # Calculate the magnitude of each coordinate and pair it with the corresponding tuple
         l_magnitudes = [(np.linalg.norm(xy), xy, name) for xy, name in l_cones]
         r_magnitudes = [(np.linalg.norm(xy), xy, name) for xy, name in r_cones]
