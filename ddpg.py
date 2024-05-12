@@ -217,13 +217,17 @@ class EpsilonGreedy:
         self.epsilon = self.start_eps
 
     def get_action(self, agent, state):
-        if np.random.rand() < self.get_epsilon():
+        chk = self.get_epsilon()
+        rand = np.random.rand()
+        if rand < chk:
             # Explore: Take a random action
             action = np.asarray([1, np.random.normal(0, self.sigma)]) 
+            #print(f'explore : eps: {chk}')
             # print(action)
             action = agent.clip_action(action)
         else:
             # Exploit: Take the action recommended by the agent
+            #print(f'exploit -> rand: {rand} eps: {chk}')
             action = agent.get_action(state)
 
         return action
