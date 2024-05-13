@@ -114,7 +114,15 @@ class RandomTrackEnv(gym.Env):
                         cv2.cvtColor(results.render()[0], cv2.COLOR_RGB2BGR),
                     )
                     cv2.waitKey(1)
-                time.sleep(self._timeStep)
+                pos, ori = self._p.getBasePositionAndOrientation(self.car.car)
+                ori = self._p.getEulerFromQuaternion(ori)
+                self._p.resetDebugVisualizerCamera(
+                    cameraDistance=10.0,
+                    cameraYaw=math.degrees(ori[2]) - 90,
+                    cameraPitch=-45,
+                    cameraTargetPosition=pos,
+                )
+                # time.sleep(self._timeStep)
 
             carpos, carorn = self._p.getBasePositionAndOrientation(self.car.car)
             # goalpos, goalorn = self._p.getBasePositionAndOrientation(
