@@ -82,7 +82,7 @@ class RandomTrackEnv(gym.Env):
         self._path = None
         self.reached_goal = False
         self._timeStep = 0.01
-        self._actionRepeat = 50
+        self._actionRepeat = 20
         self.car = None
         self.done = False
         self.prev_dist = None
