@@ -106,10 +106,13 @@ class RandomTrackEnv(gym.Env):
         for i in range(self._actionRepeat):
             self._p.stepSimulation()
             if self._renders:
-                rgb, depth = self.render()
                 if self.detects_:
+                    rgb, depth = self.render()
                     results = self.detector.detect(rgb)
-                    cv2.imshow('Detections', cv2.cvtColor(results.render()[0], cv2.COLOR_RGB2BGR))
+                    cv2.imshow(
+                        "Detections",
+                        cv2.cvtColor(results.render()[0], cv2.COLOR_RGB2BGR),
+                    )
                     cv2.waitKey(1)
                 time.sleep(self._timeStep)
 
@@ -123,8 +126,8 @@ class RandomTrackEnv(gym.Env):
                 self.done = True
                 break
             self._envStepCounter += 1
-        
-        if self._renders:
+
+        if self._renders and self.detects_:
             box = []
             for i in range(4):
                 boxes = results.pred[0][i, :4].cpu()
