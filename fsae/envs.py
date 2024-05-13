@@ -133,7 +133,7 @@ class RandomTrackEnv(gym.Env):
                     cameraPitch=-45,
                     cameraTargetPosition=pos,
                 )
-                # time.sleep(self._timeStep)
+                time.sleep(self._timeStep)
 
             carpos, carorn = self._p.getBasePositionAndOrientation(self.car.car)
             # goalpos, goalorn = self._p.getBasePositionAndOrientation(
