@@ -14,6 +14,7 @@ from collections import deque
 from fsae.detect import object_detection
 import cv2
 
+
 def draw_bounding_boxes(image_array, bboxes, colors=None):
     """
     Draw bounding boxes on an RGB image array.
@@ -26,20 +27,30 @@ def draw_bounding_boxes(image_array, bboxes, colors=None):
     Returns:
         numpy.ndarray: The image array with bounding boxes drawn.
     """
-    
+
     # Convert the RGB image array to BGR format (OpenCV convention)
     image = cv2.cvtColor(image_array, cv2.COLOR_RGB2BGR)
-    
+
     # If colors is None, generate random colors for each bounding box
     if colors is None:
-        colors = [(np.random.randint(0, 256), np.random.randint(0, 256), np.random.randint(0, 256)) for _ in range(len(bboxes))]
-    
+        colors = [
+            (
+                np.random.randint(0, 256),
+                np.random.randint(0, 256),
+                np.random.randint(0, 256),
+            )
+            for _ in range(len(bboxes))
+        ]
+
     # Draw the bounding boxes
     for bbox, color in zip(bboxes, colors):
         x_min, y_min, x_max, y_max = bbox
-        cv2.rectangle(image, (int(x_min), int(y_min)), (int(x_max), int(y_max)), color, 2)
-    
+        cv2.rectangle(
+            image, (int(x_min), int(y_min)), (int(x_max), int(y_max)), color, 2
+        )
+
     return image
+
 
 class RandomTrackEnv(gym.Env):
     metadata = {"render_modes": ["human", "fp_camera", "tp_camera", "detections"]}
@@ -60,14 +71,14 @@ class RandomTrackEnv(gym.Env):
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
-        if self.render_mode == 'detections':
+        if self.render_mode == "detections":
             self.detects_ = True
-        else: 
+        else:
             self.detects_ = False
 
-        if render_mode == 'detections':
+        if render_mode == "detections":
             self._renders = True
-            self._p = bc.BulletClient()#connection_mode=p.GUI)
+            self._p = bc.BulletClient()  # connection_mode=p.GUI)
         elif render_mode:
             self._p = bc.BulletClient(connection_mode=p.GUI)
             self._renders = True
@@ -91,9 +102,9 @@ class RandomTrackEnv(gym.Env):
         self.reset()
         self._envStepCounter = 0
         if self.detects_:
-            self.detector = object_detection('fsae/cones.pt',(0.23, 0.31))
-            self.detection_window = cv2.namedWindow('Detections')
-    
+            self.detector = object_detection("fsae/cones.pt", (0.23, 0.31))
+            self.detection_window = cv2.namedWindow("Detections")
+
     def step(self, action):
         """
         Steps the simulation, applying the action.
@@ -142,7 +153,7 @@ class RandomTrackEnv(gym.Env):
                 box.append(boxes)
                 print(self.detector.reproject_object_to_3d(boxes, depth))
                 print(results.pred[0][i, 5])
-            cv2.imshow('valid',draw_bounding_boxes(rgb, box))
+            cv2.imshow("valid", draw_bounding_boxes(rgb, box))
             cv2.waitKey(0)
 
         dist = self.projectAndFindDistance(
@@ -151,13 +162,11 @@ class RandomTrackEnv(gym.Env):
             self.car.get_observation()[0:2],
         )
 
-        if dist < self.prev_dist: #if the car sarts reversing
+        if dist < self.prev_dist:  # if the car sarts reversing
             self.done = True
-            
 
-        if (dist - self.prev_dist) < 0.0001: #if the car is stopped
+        if (dist - self.prev_dist) < 0.0001:  # if the car is stopped
             self.done = True
-            
 
         reward = dist - self.prev_dist
         self.prev_dist = dist
@@ -204,10 +213,11 @@ class RandomTrackEnv(gym.Env):
         # self.goal_object = Goal(self._p, self.goal)
         # Get observation to return
         carpos = self.car.get_observation()
-
+        config = {}
         if seed is not None:
-            self._track_generator = TrackGenerator(config={"seed": seed})
+            config["seed"] = seed
 
+        self._track_generator = TrackGenerator(config=config)
         margin = (
             self._track_generator.config["track_width"] / 2
             + self._track_generator.config["margin"]
@@ -283,7 +293,7 @@ class RandomTrackEnv(gym.Env):
         This function supports two modes of camera views in a simulation environment:
         1. "fp_camera" - First person camera view from the perspective of a car.
         2. "tp_camera" - Third person camera view, providing an overhead perspective.
-        3. "detector" 
+        3. "detector"
 
         :param mode (str): Specifies the camera mode. It can be either "fp_camera" for first person
                     view or "tp_camera" for third person view. The default is "fp_camera".
@@ -307,7 +317,7 @@ class RandomTrackEnv(gym.Env):
             # Base information
             car_id = self.car.get_ids()
             proj_matrix = self._p.computeProjectionMatrixFOV(
-                fov=60, aspect=16/9, nearVal=0.01, farVal=100
+                fov=60, aspect=16 / 9, nearVal=0.01, farVal=100
             )
             pos, ori = [list(l) for l in self._p.getBasePositionAndOrientation(car_id)]
             pos[2] = 0.4
@@ -328,14 +338,14 @@ class RandomTrackEnv(gym.Env):
                 viewMatrix=view_matrix,
                 projectionMatrix=proj_matrix,
                 renderer=p.ER_BULLET_HARDWARE_OPENGL,
-            ) 
+            )
             return (rgb, depth)
-        
+
         elif mode == "detections":
             # Base information
             car_id = self.car.get_ids()
             fov = 60
-            aspect = 16/9
+            aspect = 16 / 9
             near = 0.01
             far = 100
             proj_matrix = self._p.computeProjectionMatrixFOV(
@@ -350,7 +360,9 @@ class RandomTrackEnv(gym.Env):
             up_vec = np.matmul(rot_mat, np.array([0, 0, 1]))
             view_matrix = self._p.computeViewMatrix(pos, pos + camera_vec, up_vec)
 
-            self.detector.set_intrinsics(fov,aspect, self.RENDER_WIDTH, self.RENDER_HEIGHT, near, far)
+            self.detector.set_intrinsics(
+                fov, aspect, self.RENDER_WIDTH, self.RENDER_HEIGHT, near, far
+            )
             # Display image
             # frame = self._p.getCameraImage(100, 100, view_matrix, proj_matrix)[2]
             # frame = np.reshape(frame, (100, 100, 4))
@@ -510,8 +522,8 @@ class RandomTrackEnv(gym.Env):
         r_cones = [
             (p, c) for p, c in r_cones if (abs(p[0]) >= abs(p[1])) and (p[0] > 0)
         ]
-        # if detected_cones: 
-        #     for 
+        # if detected_cones:
+        #     for
         # Calculate the magnitude of each coordinate and pair it with the corresponding tuple
         l_magnitudes = [(np.linalg.norm(xy), xy, name) for xy, name in l_cones]
         r_magnitudes = [(np.linalg.norm(xy), xy, name) for xy, name in r_cones]
