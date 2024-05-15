@@ -4,7 +4,7 @@ This project implements a reinforcement learning agent using the Deep Determinis
 
 ## Documentation
 
-Detailed documentation for this project, including installation instructions, usage guidelines, and algorithm explanations, is available on the [GitHub Wiki](https://github.com/your-username/fsae-ddpg-racing-car/wiki](https://github.com/Gibson431/ai-in-robotics-41118/wiki ).
+Detailed documentation for this project, including installation instructions, usage guidelines, and algorithm explanations, is available on the [GitHub Wiki](https://github.com/Gibson431/ai-in-robotics-41118/wiki).
 
 ## Quick Start
 
@@ -13,7 +13,7 @@ Detailed documentation for this project, including installation instructions, us
 3. Install the required dependencies: `pip install -r requirements.txt`
 4. View the pretrained weights: `python evaluate.py`
 
-For more information on configuring the training process, evaluating the trained agent, and understanding the implementation details, please refer to the [GitHub Wiki](https://github.com/your-username/fsae-ddpg-racing-car/wiki](https://github.com/Gibson431/ai-in-robotics-41118/wiki ).
+For more information on configuring the training process, evaluating the trained agent, and understanding the implementation details, please refer to the [GitHub Wiki](https://github.com/Gibson431/ai-in-robotics-41118/wiki).
 
 ## Contributing
 
