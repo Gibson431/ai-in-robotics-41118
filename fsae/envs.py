@@ -149,6 +149,7 @@ class RandomTrackEnv(gym.Env):
         if self._renders and self.detects_:
             box = []
             for i in range(4):
+                # for i in range(len(results.pred[0])):
                 boxes = results.pred[0][i, :4].cpu()
                 box.append(boxes)
                 print(self.detector.reproject_object_to_3d(boxes, depth))

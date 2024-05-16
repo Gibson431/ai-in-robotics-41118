@@ -105,23 +105,28 @@ class object_detection():
         x_min, y_min, x_max, y_max = bbox
 
         # Calculate the center of the bounding box
-        center_x = x_min + (x_max - x_min) / 2
-        center_y = y_min + (y_max - y_min) / 2
+        center_x = (x_min + x_max) / 2
+        center_y = (y_min + y_max) / 2
 
         # Get the linear depth value at the center of the bounding box
         linear_depth = depth_image[int(center_y), int(center_x)]
 
         # Convert linear depth to depth in meters
-        depth = self.far_plane * self.near_plane / (self.far_plane - (self.far_plane - self.near_plane) * linear_depth)
+        depth = (
+            self.far_plane
+            * self.near_plane
+            / (self.far_plane - (self.far_plane - self.near_plane) * linear_depth)
+        )
 
         # Compute the normalized device coordinates
         x_ndc = (center_x - self.cx) / self.fx
         y_ndc = (center_y - self.cy) / self.fy
 
         # Reproject the center of the bounding box to 3D
-        X = x_ndc * depth
-        Y = y_ndc * depth
-        Z = depth
+        # (rotates coordinates to match car orientation)
+        X = depth
+        Y = x_ndc * depth
+        Z = y_ndc * depth
 
         # Adjust Y coordinate based on the known object height
         object_height_pixels = (self.height * self.fy) / depth
