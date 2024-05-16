@@ -1,13 +1,14 @@
 import yolov5
 import numpy as np
 
-class object_detection():
+
+class object_detection:
     """class to handle object_detection and reprojection for known object
 
-        Args: 
-            weights (string): Path to model weights
-            object_size (tuple): width and height in metres of object to detect
-            intrinsics (matrix): fx, fy; cx, cy
+    Args:
+        weights (string): Path to model weights
+        object_size (tuple): width and height in metres of object to detect
+        intrinsics (matrix): fx, fy; cx, cy
     """
 
     def __init__(self, weights, object_size):
@@ -28,8 +29,8 @@ class object_detection():
 
     def set_intrinsics(self, fov, aspect, image_width, image_height, near, far):
         # Calculate focal length
-        focal_length_x = image_width/(2 * aspect * np.tan(np.radians(fov / 2)))
-        focal_length_y = image_height/(2 * np.tan(np.radians(fov/ 2)))
+        focal_length_x = image_width / (2 * aspect * np.tan(np.radians(fov / 2)))
+        focal_length_y = image_height / (2 * np.tan(np.radians(fov / 2)))
 
         # Calculate principal point
         principal_point_x = image_width / 2
@@ -41,15 +42,13 @@ class object_detection():
         self.cx = principal_point_x
         self.cy = principal_point_y
 
-
-            # Compute the near and far plane distances from the projection matrix
+        # Compute the near and far plane distances from the projection matrix
         self.near_plane = near
         self.far_plane = far
 
-    def detect(self,image):
+    def detect(self, image):
         return self.model(image, size=1280)
 
-    
     # def reproject_object_to_3d(self, bbox, depth_im):
     #     """
     #     Reprojects an object into 3D coordinates from the camera frame.
@@ -86,7 +85,6 @@ class object_detection():
     #     # Y -= ((y_max-y_min) / 2 - object_height_pixels / 2)
 
     #     return X, Y, Z
-    
 
     def reproject_object_to_3d(self, bbox, depth_image):
         """
@@ -130,9 +128,6 @@ class object_detection():
 
         # Adjust Y coordinate based on the known object height
         object_height_pixels = (self.height * self.fy) / depth
-        Y -= ((y_max - y_min) / 2 - object_height_pixels / 2)
+        Y -= (y_max - y_min) / 2 - object_height_pixels / 2
 
         return X, Y, Z
-        
-
-    

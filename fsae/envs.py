@@ -117,14 +117,14 @@ class RandomTrackEnv(gym.Env):
         for i in range(self._actionRepeat):
             self._p.stepSimulation()
             if self._renders:
-                if self.detects_:
-                    rgb, depth = self.render()
-                    results = self.detector.detect(rgb)
-                    cv2.imshow(
-                        "Detections",
-                        cv2.cvtColor(results.render()[0], cv2.COLOR_RGB2BGR),
-                    )
-                    cv2.waitKey(1)
+                # if self.detects_:
+                #   rgb, depth = self.render()
+                #   results = self.detector.detect(rgb)
+                #   cv2.imshow(
+                #       "Detections",
+                #       cv2.cvtColor(results.render()[0], cv2.COLOR_RGB2BGR),
+                #   )
+                #   cv2.waitKey(1)
                 pos, ori = self._p.getBasePositionAndOrientation(self.car.car)
                 ori = self._p.getEulerFromQuaternion(ori)
                 self._p.resetDebugVisualizerCamera(
@@ -146,16 +146,16 @@ class RandomTrackEnv(gym.Env):
                 break
             self._envStepCounter += 1
 
-        if self._renders and self.detects_:
-            box = []
-            for i in range(4):
-                # for i in range(len(results.pred[0])):
-                boxes = results.pred[0][i, :4].cpu()
-                box.append(boxes)
-                print(self.detector.reproject_object_to_3d(boxes, depth))
-                print(results.pred[0][i, 5])
-            cv2.imshow("valid", draw_bounding_boxes(rgb, box))
-            cv2.waitKey(0)
+        # if self._renders and self.detects_:
+        #     box = []
+        #     for i in range(4):
+        #         # for i in range(len(results.pred[0])):
+        #         boxes = results.pred[0][i, :4].cpu()
+        #         box.append(boxes)
+        #         print(self.detector.reproject_object_to_3d(boxes, depth))
+        #         print(results.pred[0][i, 5])
+        #     cv2.imshow("valid", draw_bounding_boxes(rgb, box))
+        #     cv2.waitKey(0)
 
         dist = self.projectAndFindDistance(
             list(self.centres)[0],
@@ -192,9 +192,17 @@ class RandomTrackEnv(gym.Env):
             )
 
         ob = car_ob
-        visual_cones = np.asarray(
-            self.getConesTransformedAndSorted(4), dtype=np.float32
-        )
+        if self.detects_:
+            visual_cones = self.detect_cones()
+            visual_cones_real = np.asarray(
+                self.getConesTransformedAndSorted(4), dtype=np.float32
+            )
+            print(f"cv\t{visual_cones}")
+            print(f"real\t{visual_cones_real}")
+        else:
+            visual_cones = np.asarray(
+                self.getConesTransformedAndSorted(4), dtype=np.float32
+            )
         return visual_cones, reward, self.done, dict()
 
     def seed(self, seed=None):
@@ -508,6 +516,44 @@ class RandomTrackEnv(gym.Env):
 
         return distance
 
+    def detect_cones(self):
+        rgb, depth = self.render("detections")
+        results = self.detector.detect(rgb)
+        box = []
+        l_cones = []
+        r_cones = []
+        for p in results.pred[0]:
+            boxes = p[:4].cpu()
+            box.append(boxes)
+            xyz = self.detector.reproject_object_to_3d(boxes.numpy(), depth)
+            if p[5] == 0:
+                l_cones.append((xyz[:2], "blue"))
+            elif p[5] == 4:
+                r_cones.append((xyz[:2], "yellow"))
+
+        # Calculate the magnitude of each coordinate and pair it with the corresponding tuple
+        l_magnitudes = [(np.linalg.norm(xy), xy, name) for xy, name in l_cones]
+        r_magnitudes = [(np.linalg.norm(xy), xy, name) for xy, name in r_cones]
+
+        # Sort the list of tuples based on the calculated magnitude
+        l_sorted_magnitudes = sorted(l_magnitudes, key=lambda x: x[0])
+        r_sorted_magnitudes = sorted(r_magnitudes, key=lambda x: x[0])
+
+        l_cones = [(xy, name) for _, xy, name in l_sorted_magnitudes][:2]
+        r_cones = [(xy, name) for _, xy, name in r_sorted_magnitudes][:2]
+
+        cones_mapped = []
+        for c, _ in l_cones:
+            cones_mapped.append(c)
+        while len(cones_mapped) < 2:
+            cones_mapped.append([0, 0])
+        for c, _ in r_cones:
+            cones_mapped.append(c)
+        while len(cones_mapped) < 4:
+            cones_mapped.append([0, 0])
+        cones_stacked = np.hstack([np.hstack(detection) for detection in cones_mapped])
+        return cones_stacked
+
     def getConesTransformedAndSorted(self, num_cones, detected_cones=None):
         l_cones = [c for c in self.cones if c.color == "blue"]
         r_cones = [c for c in self.cones if c.color == "yellow"]
@@ -523,8 +569,7 @@ class RandomTrackEnv(gym.Env):
         r_cones = [
             (p, c) for p, c in r_cones if (abs(p[0]) >= abs(p[1])) and (p[0] > 0)
         ]
-        # if detected_cones:
-        #     for
+
         # Calculate the magnitude of each coordinate and pair it with the corresponding tuple
         l_magnitudes = [(np.linalg.norm(xy), xy, name) for xy, name in l_cones]
         r_magnitudes = [(np.linalg.norm(xy), xy, name) for xy, name in r_cones]
