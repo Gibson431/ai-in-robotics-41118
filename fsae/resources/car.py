@@ -43,7 +43,7 @@ class Car:
                                         self.c_rolling)
         acceleration = self.c_throttle * throttle + friction
         # Each time step is 1/240 of a second
-        self.joint_speed = min(self.joint_speed + 0.01 * acceleration, 50.0)
+        self.joint_speed = min(self.joint_speed + 0.01 * acceleration, 20.0)
 
         # Set the velocity of the wheel joints directly
         self.client.setJointMotorControlArray(
