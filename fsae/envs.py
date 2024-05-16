@@ -99,11 +99,11 @@ class RandomTrackEnv(gym.Env):
         self.prev_dist = None
         self.rendered_img = None
         self.render_rot_matrix = None
-        self.reset()
         self._envStepCounter = 0
         if self.detects_:
             self.detector = object_detection("fsae/cones.pt", (0.23, 0.31))
             self.detection_window = cv2.namedWindow("Detections")
+        self.reset()
 
     def step(self, action):
         """
@@ -194,15 +194,8 @@ class RandomTrackEnv(gym.Env):
         ob = car_ob
         if self.detects_:
             visual_cones = self.detect_cones()
-            visual_cones_real = np.asarray(
-                self.getConesTransformedAndSorted(4), dtype=np.float32
-            )
-            print(f"cv\t{visual_cones}")
-            print(f"real\t{visual_cones_real}")
         else:
-            visual_cones = np.asarray(
-                self.getConesTransformedAndSorted(4), dtype=np.float32
-            )
+            visual_cones = self.getConesTransformedAndSorted(4)
         return visual_cones, reward, self.done, dict()
 
     def seed(self, seed=None):
@@ -291,8 +284,11 @@ class RandomTrackEnv(gym.Env):
         #     self.centre_obj.append(Goal(self._p, c))
 
         self.prev_dist = 0
-        # car_ob = self.getExtendedObservation()
-        visual_cones = self.getConesTransformedAndSorted(4)
+        if self.detects_:
+            visual_cones = self.detect_cones()
+        else:
+            visual_cones = self.getConesTransformedAndSorted(4)
+
         return visual_cones
 
     def render(self, mode=None):
@@ -353,7 +349,7 @@ class RandomTrackEnv(gym.Env):
         elif mode == "detections":
             # Base information
             car_id = self.car.get_ids()
-            fov = 60
+            fov = 90
             aspect = 16 / 9
             near = 0.01
             far = 100

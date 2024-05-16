@@ -123,11 +123,11 @@ class object_detection:
         # Reproject the center of the bounding box to 3D
         # (rotates coordinates to match car orientation)
         X = depth
-        Y = x_ndc * depth
+        Y = -(x_ndc * depth)
         Z = y_ndc * depth
 
         # Adjust Y coordinate based on the known object height
-        object_height_pixels = (self.height * self.fy) / depth
-        Y -= (y_max - y_min) / 2 - object_height_pixels / 2
+        # object_height_pixels = (self.height * self.fy) / depth
+        # Y -= (y_max - y_min) / 2 - object_height_pixels / 2
 
         return X, Y, Z
