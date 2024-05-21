@@ -1,13 +1,14 @@
 import yolov5
 import numpy as np
 
-class object_detection():
+
+class object_detection:
     """class to handle object_detection and reprojection for known object
 
-        Args: 
-            weights (string): Path to model weights
-            object_size (tuple): width and height in metres of object to detect
-            intrinsics (matrix): fx, fy; cx, cy
+    Args:
+        weights (string): Path to model weights
+        object_size (tuple): width and height in metres of object to detect
+        intrinsics (matrix): fx, fy; cx, cy
     """
 
     def __init__(self, weights, object_size):
@@ -28,8 +29,8 @@ class object_detection():
 
     def set_intrinsics(self, fov, aspect, image_width, image_height, near, far):
         # Calculate focal length
-        focal_length_x = image_width/(2 * aspect * np.tan(np.radians(fov / 2)))
-        focal_length_y = image_height/(2 * np.tan(np.radians(fov/ 2)))
+        focal_length_x = image_width / (2 * aspect * np.tan(np.radians(fov / 2)))
+        focal_length_y = image_height / (2 * np.tan(np.radians(fov / 2)))
 
         # Calculate principal point
         principal_point_x = image_width / 2
@@ -41,15 +42,13 @@ class object_detection():
         self.cx = principal_point_x
         self.cy = principal_point_y
 
-
-            # Compute the near and far plane distances from the projection matrix
+        # Compute the near and far plane distances from the projection matrix
         self.near_plane = near
         self.far_plane = far
 
-    def detect(self,image):
+    def detect(self, image):
         return self.model(image, size=1280)
 
-    
     # def reproject_object_to_3d(self, bbox, depth_im):
     #     """
     #     Reprojects an object into 3D coordinates from the camera frame.
@@ -86,7 +85,6 @@ class object_detection():
     #     # Y -= ((y_max-y_min) / 2 - object_height_pixels / 2)
 
     #     return X, Y, Z
-    
 
     def reproject_object_to_3d(self, bbox, depth_image):
         """
@@ -105,29 +103,31 @@ class object_detection():
         x_min, y_min, x_max, y_max = bbox
 
         # Calculate the center of the bounding box
-        center_x = x_min + (x_max - x_min) / 2
-        center_y = y_min + (y_max - y_min) / 2
+        center_x = (x_min + x_max) / 2
+        center_y = (y_min + y_max) / 2
 
         # Get the linear depth value at the center of the bounding box
         linear_depth = depth_image[int(center_y), int(center_x)]
 
         # Convert linear depth to depth in meters
-        depth = self.far_plane * self.near_plane / (self.far_plane - (self.far_plane - self.near_plane) * linear_depth)
+        depth = (
+            self.far_plane
+            * self.near_plane
+            / (self.far_plane - (self.far_plane - self.near_plane) * linear_depth)
+        )
 
         # Compute the normalized device coordinates
         x_ndc = (center_x - self.cx) / self.fx
         y_ndc = (center_y - self.cy) / self.fy
 
         # Reproject the center of the bounding box to 3D
-        X = x_ndc * depth
-        Y = y_ndc * depth
-        Z = depth
+        # (rotates coordinates to match car orientation)
+        X = depth
+        Y = -(x_ndc * depth)
+        Z = y_ndc * depth
 
         # Adjust Y coordinate based on the known object height
-        object_height_pixels = (self.height * self.fy) / depth
-        Y -= ((y_max - y_min) / 2 - object_height_pixels / 2)
+        # object_height_pixels = (self.height * self.fy) / depth
+        # Y -= (y_max - y_min) / 2 - object_height_pixels / 2
 
         return X, Y, Z
-        
-
-    

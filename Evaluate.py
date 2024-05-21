@@ -1,7 +1,8 @@
 from fsae.envs import *
 from ddpg import ReplayBuffer, DDPGAgent, EpsilonGreedy
 
-env = RandomTrackEnv(render_mode="tp_camera", seed=0)
+# env = RandomTrackEnv(render_mode="tp_camera", seed=0)
+env = RandomTrackEnv(render_mode="detections", seed=0)
 
 # Initialize the agent, replay buffer, and environment
 state_dim = 8  # Dimension of the state space
