@@ -116,7 +116,7 @@ class object_detection:
             / (self.far_plane - (self.far_plane - self.near_plane) * linear_depth)
         )
 
-        # Compute the normalized device coordinates
+        # Compute the normalised device coordinates
         x_ndc = (center_x - self.cx) / self.fx
         y_ndc = (center_y - self.cy) / self.fy
 
