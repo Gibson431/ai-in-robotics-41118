@@ -22,6 +22,15 @@ class object_detection():
         self.cy = intrinsics[1,1]
 
     def detect(self,image):
+        """
+        Runs the object detector to find all cones within the image. 
+
+        Args:
+            image (np.ndarray): 3D Numpy array containing rgb values for an image.
+
+        Returns:
+            yolov5 result: yolov5 pip package result object.
+        """
         image = torch.from_numpy(image).to(self.device)
         return self.model(image)
     
