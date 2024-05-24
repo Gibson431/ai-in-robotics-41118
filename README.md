@@ -3,8 +3,7 @@
 This project implements a reinforcement learning agent using the Deep Deterministic Policy Gradient (DDPG) algorithm to control a racing car in the PyBullet physics simulation environment. The goal is to train the agent to navigate a race track as quickly as possible while staying on the track.
 
 ## Final Video
-A video was created of the project process, results and discussion and a full lap demonstration. The video is available at [Final Video]
-(https://youtu.be/YQ0deGengaM). 
+A video was created of the project process, results and discussion and a full lap demonstration. The video is available at [Final video](https://youtu.be/YQ0deGengaM).
 
 ## Documentation
 
